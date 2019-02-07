@@ -1,6 +1,8 @@
 # (C) Datadog, Inc. 2018
 # All rights reserved
 # Licensed under a 3-clause BSD style license (see LICENSE)
+from openstack import connection
+from os import environ
 import requests
 import simplejson as json
 
@@ -24,10 +26,19 @@ class ApiFactory(object):
         paginated_limit = instance_config.get('paginated_limit')
         request_timeout = instance_config.get('request_timeout')
         user = instance_config.get("user")
+        openstack_sdk_config_file_path = instance_config.get("openstack_sdk_config_file_path")
+        openstack_sdk_cloud_name = instance_config.get("openstack_sdk_cloud_name")
 
-        api = SimpleApi(logger, keystone_server_url, timeout=request_timeout, ssl_verify=ssl_verify, proxies=proxies,
-                        limit=paginated_limit)
-        api.connect(user)
+        api = None
+
+        if openstack_sdk_cloud_name is None:
+            api = SimpleApi(logger, keystone_server_url, timeout=request_timeout, ssl_verify=ssl_verify,
+                            proxies=proxies, limit=paginated_limit)
+            api.connect(user)
+        else:
+            api = OpenstackSdkApi(logger)
+            api.connect(openstack_sdk_config_file_path, openstack_sdk_cloud_name)
+
         return api
 
 
@@ -70,6 +81,50 @@ class AbstractApi(object):
 
     def get_networks(self):
         raise NotImplementedError()
+
+
+class OpenstackSdkApi(AbstractApi):
+    def __init__(self, logger):
+        super(OpenstackSdkApi, self).__init__(logger)
+
+        self.connection = None
+
+    def connect(self, openstack_sdk_config_file_path, openstack_sdk_cloud_name):
+        if openstack_sdk_config_file_path is not None:
+            # Set the environment variable to the path of the config file for openstacksdk to find it
+            environ["OS_CLIENT_CONFIG_FILE"] = openstack_sdk_config_file_path
+
+        self.connection = connection.Connection(cloud=openstack_sdk_cloud_name)
+
+    def get_keystone_endpoint(self):
+        if self.connection is None:
+            raise AuthenticationNeeded()
+
+        keystone_endpoint = self.connection.get_endpoint("keystone")
+        if not keystone_endpoint:
+            raise KeystoneUnreachable()
+
+        return keystone_endpoint["public_url"]
+
+    def get_nova_endpoint(self):
+        if self.connection is None:
+            raise AuthenticationNeeded()
+
+        nova_endpoint = self.connection.get_endpoint("nova")
+        if not nova_endpoint:
+            raise MissingNovaEndpoint()
+
+        return nova_endpoint["public_url"]
+
+    def get_neutron_endpoint(self):
+        if self.connection is None:
+            raise AuthenticationNeeded()
+
+        neutron_endpoint = self.connection.get_endpoint("nova")
+        if not neutron_endpoint:
+            raise MissingNeutronEndpoint()
+
+        return neutron_endpoint["public_url"]
 
 
 class SimpleApi(AbstractApi):
