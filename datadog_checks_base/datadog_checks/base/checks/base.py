@@ -35,7 +35,6 @@ from ..utils.common import ensure_bytes, ensure_unicode
 from ..utils.proxy import config_proxy_skip
 from ..utils.limiter import Limiter
 
-
 # Metric types for which it's only useful to submit once per set of tags
 ONE_PER_CONTEXT_METRIC_TYPES = [
     aggregator.GAUGE,
@@ -63,6 +62,13 @@ class __AgentCheck7(object):
     DEFAULT_METRIC_LIMIT = 0
 
     def __init__(self, *args, **kwargs):
+        try: # pyyaml may not be available
+            import yaml
+            from .ddyaml import monkey_patch_pyyaml
+            monkey_patch_pyyaml()
+        except ImportError:
+            pass
+
         """
         args: `name`, `init_config`, `agentConfig` (deprecated), `instances`
         """
@@ -423,6 +429,13 @@ class __AgentCheck6(object):
     DEFAULT_METRIC_LIMIT = 0
 
     def __init__(self, *args, **kwargs):
+        try: # pyyaml may not be available
+            import yaml
+            from .ddyaml import monkey_patch_pyyaml
+            monkey_patch_pyyaml()
+        except ImportError:
+            pass
+
         """
         args: `name`, `init_config`, `agentConfig` (deprecated), `instances`
         """
